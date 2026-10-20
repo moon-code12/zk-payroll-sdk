@@ -1,4 +1,11 @@
-import { AssetId, AssetMetadata, AssetMetadataInput, AssetAvailability } from "./types";
+import { getAssetDeprecation } from "./assetDeprecation";
+import {
+  AssetAvailability,
+  AssetDeprecation,
+  AssetId,
+  AssetMetadata,
+  AssetMetadataInput,
+} from "./types";
 
 /**
  * Built-in well-known assets bundled with the SDK.
@@ -201,6 +208,36 @@ export class AssetRegistryClass {
   }
 
   /**
+   * Return deprecation details for an asset, or `undefined` when the asset is
+   * not registered, not deprecated, or the lookup is invalid.
+   *
+   * Accepts both an `AssetId` and a ticker symbol (case-insensitive).
+   *
+   * @param idOrSymbol - Asset ID or ticker symbol to inspect.
+   *
+   * @example
+   * ```ts
+   * const deprecation = AssetRegistry.getDeprecation("usdc-old");
+   * if (deprecation) console.warn(deprecation.message);
+   * ```
+   */
+  getDeprecation(idOrSymbol: string): AssetDeprecation | undefined {
+    if (typeof idOrSymbol !== "string") return undefined;
+    const metadata = this.get(idOrSymbol);
+    if (!metadata) return undefined;
+    return getAssetDeprecation(metadata);
+  }
+
+  /**
+   * Check whether an asset is marked deprecated for new payroll payments.
+   *
+   * @param idOrSymbol - Asset ID or ticker symbol to test.
+   */
+  isDeprecated(idOrSymbol: string): boolean {
+    return this.getDeprecation(idOrSymbol) !== undefined;
+  }
+
+  /**
    * Check whether an asset is available for use in a payroll flow.
    *
    * This is a safety check intended to be called before constructing a
@@ -259,6 +296,18 @@ export class AssetRegistryClass {
         code: "invalid_metadata",
         reason: `Registered metadata for asset "${metadata.id}" is not usable for payroll.`,
         metadata,
+      };
+    }
+
+    const deprecation = getAssetDeprecation(metadata);
+    if (deprecation) {
+      return {
+        assetId: metadata.id,
+        available: true,
+        code: "ok",
+        metadata,
+        deprecated: true,
+        deprecation,
       };
     }
 

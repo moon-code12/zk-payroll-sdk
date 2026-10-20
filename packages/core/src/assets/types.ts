@@ -36,6 +36,31 @@ export const NATIVE_ASSET_ID = "native" as const;
 export type AssetDisplayFormat = "decimal" | "integer";
 
 /**
+ * Deprecation details for an asset that should no longer be used for new
+ * payroll payments.
+ *
+ * Deprecation is advisory: the asset may still be accepted on-chain, but
+ * integrators should migrate to `replacementAssetId` before it is removed.
+ */
+export interface AssetDeprecation {
+  /** Always `true`; allows the value to be used as a discriminated flag. */
+  deprecated: true;
+
+  /**
+   * Human-readable, actionable notice. Includes the replacement asset when
+   * one is known.
+   */
+  message: string;
+
+  /**
+   * Canonical ID of the asset that replaces this one, when known.
+   * Register the replacement with `AssetRegistry.register` to let callers
+   * resolve its metadata.
+   */
+  replacementAssetId?: AssetId;
+}
+
+/**
  * All metadata the SDK needs to correctly handle and display an asset.
  *
  * Register additional assets via `AssetRegistry.register`.
@@ -83,6 +108,29 @@ export interface AssetMetadata {
   iconUrl?: string;
 
   /**
+   * Mark the asset as deprecated for new payroll payments.
+   *
+   * Deprecated assets remain registered and can still be looked up and
+   * formatted, but `assertPaymentAssetUsable` rejects them by default so
+   * new payments cannot accidentally target an asset that is being retired.
+   * Defaults to `false` when omitted.
+   */
+  deprecated?: boolean;
+
+  /**
+   * Actionable notice shown to integrators and end users when the asset is
+   * deprecated. When omitted, the SDK generates a default message that
+   * includes the asset symbol and, when set, `replacementAssetId`.
+   */
+  deprecationMessage?: string;
+
+  /**
+   * Canonical ID of the asset that replaces this deprecated one.
+   * Used to build migration guidance in deprecation messages and results.
+   */
+  replacementAssetId?: AssetId;
+
+  /**
    * Arbitrary app-specific metadata that the core SDK does not interpret.
    * Use this for protocol-level context that doesn't belong in the
    * standard fields (e.g. governance contract address, risk tier).
@@ -97,7 +145,17 @@ export interface AssetMetadata {
  * `iconUrl` and `customData` are always optional.
  */
 export type AssetMetadataInput = Pick<AssetMetadata, "id" | "symbol" | "label" | "decimals"> &
-  Partial<Pick<AssetMetadata, "displayFormat" | "iconUrl" | "customData">>;
+  Partial<
+    Pick<
+      AssetMetadata,
+      | "displayFormat"
+      | "iconUrl"
+      | "deprecated"
+      | "deprecationMessage"
+      | "replacementAssetId"
+      | "customData"
+    >
+  >;
 
 /**
  * Result of an asset availability check.
@@ -140,4 +198,16 @@ export interface AssetAvailability {
    * The resolved metadata when the asset is available.
    */
   metadata?: AssetMetadata;
+
+  /**
+   * `true` when the asset is registered but marked deprecated for new
+   * payroll payments. The asset may still be usable for existing flows.
+   */
+  deprecated?: boolean;
+
+  /**
+   * Structured deprecation details, including an actionable message and the
+   * replacement asset ID when known. Present only when `deprecated` is `true`.
+   */
+  deprecation?: AssetDeprecation;
 }

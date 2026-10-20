@@ -296,6 +296,54 @@ AssetRegistry.has("USDC");                    // false
 AssetRegistry.has("usdc");                    // false (symbol index cleaned up)
 ```
 
+## Deprecating a payment asset
+
+Assets that are being retired can be marked as deprecated without removing
+them from the registry. Deprecated assets stay available for existing flows
+and can still be formatted, but `assertPaymentAssetUsable` rejects them by
+default so new payments fail fast with migration guidance.
+
+```ts
+import {
+  AssetRegistry,
+  assertPaymentAssetUsable,
+  checkPaymentAssetDeprecation,
+} from "@zk-payroll/core";
+
+AssetRegistry.register({
+  id: "COLDTOKEN...",
+  symbol: "OLDUSD",
+  label: "Old USD",
+  decimals: 7,
+  deprecated: true,
+  replacementAssetId: "CNEWTOKEN...",
+  // Optional; a default message is generated when omitted.
+  deprecationMessage: "OLDUSD was retired on 2026-10-01. Migrate to NEWUSD.",
+});
+
+// Non-throwing check for validation UIs.
+const result = checkPaymentAssetDeprecation("COLDTOKEN...");
+if (result.deprecated) {
+  console.warn(result.message); // includes the replacement ID when known
+}
+
+// Throws PaymentAssetDeprecationError (code "PAYMENT_ASSET_DEPRECATED").
+assertPaymentAssetUsable("COLDTOKEN...");
+
+// Opt in while migrating an existing flow.
+assertPaymentAssetUsable("COLDTOKEN...", { allowDeprecated: true });
+```
+
+Registry helpers are also available:
+
+```ts
+AssetRegistry.isDeprecated("COLDTOKEN...");   // true
+AssetRegistry.getDeprecation("COLDTOKEN..."); // { deprecated: true, message, replacementAssetId }
+```
+
+`AssetRegistry.checkAvailability` still reports deprecated assets as
+`available: true`, with `deprecated: true` and `deprecation` details attached.
+
 ## Type reference
 
 ### `AssetMetadata`
@@ -308,6 +356,9 @@ interface AssetMetadata {
   decimals: number;                   // Smallest-unit precision (7 for XLM)
   displayFormat?: "decimal" | "integer"; // Defaults to "decimal"
   iconUrl?: string;                   // Optional icon for wallet UIs
+  deprecated?: boolean;               // Reject new payments by default
+  deprecationMessage?: string;        // Actionable migration guidance
+  replacementAssetId?: string;        // Canonical ID of the replacement asset
   customData?: Record<string, unknown>; // App-specific metadata
 }
 ```
@@ -318,7 +369,13 @@ The subset of `AssetMetadata` required when calling `register`:
 
 ```ts
 type AssetMetadataInput = Pick<AssetMetadata, "id" | "symbol" | "label" | "decimals">
-  & Partial<Pick<AssetMetadata, "displayFormat" | "iconUrl" | "customData">>;
+  & Partial<Pick<AssetMetadata,
+      | "displayFormat"
+      | "iconUrl"
+      | "deprecated"
+      | "deprecationMessage"
+      | "replacementAssetId"
+      | "customData">>;
 ```
 
 ### `FormatAmountOptions`
